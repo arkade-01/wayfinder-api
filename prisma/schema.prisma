@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  name      String?
+  credits   Int      @default(5)
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scans              Scan[]
+  bulkJobs           BulkJob[]
+  creditTransactions CreditTransaction[]
+
+  @@map("users")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  TEAM
+}
+
+// ── Scans ─────────────────────────────────────────────────────────────────────
+// Bridge traces + exit wallets are embedded in `result` (JSON) — no need for
+// separate collections. MongoDB shines here.
+model Scan {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?    @db.ObjectId
+  address   String
+  status    ScanStatus @default(PENDING)
+  result    Json?      // full ScanResult document embedded
+  pdfUrl    String?
+  error     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("scans")
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+// ── Wallet Cache ───────────────────────────────────────────────────────────────
+// Use a TTL index in Atlas (expiresAt field) to auto-purge stale entries.
+model WalletCache {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  address   String   @unique
+  data      Json
+  cachedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  @@map("wallet_cache")
+}
+
+// ── Bulk Jobs ──────────────────────────────────────────────────────────────────
+model BulkJob {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String        @db.ObjectId
+  addresses String[]
+  status    BulkJobStatus @default(PENDING)
+  progress  Int           @default(0)
+  total     Int
+  reportUrl String?
+  result    Json?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("bulk_jobs")
+}
+
+enum BulkJobStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+// ── Credit Transactions ────────────────────────────────────────────────────────
+model CreditTransaction {
+  id        String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String          @db.ObjectId
+  amount    Int
+  type      TransactionType
+  scanId    String?         @db.ObjectId
+  note      String?
+  createdAt DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("credit_transactions")
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  BONUS
+}
