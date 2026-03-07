@@ -44,6 +44,9 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
             if (mode === create_scan_dto_1.ScanMode.FULL) {
                 cached = await this.cache.get(address, 'full');
             }
+            else if (mode === create_scan_dto_1.ScanMode.BRIDGE) {
+                cached = await this.cache.get(address, 'bridge') || await this.cache.get(address, 'full');
+            }
             else {
                 cached = await this.cache.get(address, 'full') || await this.cache.get(address, 'quick');
             }
@@ -54,6 +57,28 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
                     data: { status: 'COMPLETE', result: cached },
                 });
                 return cached;
+            }
+            if (mode === create_scan_dto_1.ScanMode.BRIDGE) {
+                await job.updateProgress(20);
+                const bridgeResult = await this.bridge.trace(address);
+                await job.updateProgress(50);
+                const crossWalletExits = bridgeResult.transfers.filter((t) => t.crossWallet);
+                await job.updateProgress(70);
+                const exits = await this.bridge.traceExits(crossWalletExits, bridges_1.EXIT_TRACE_DEPTH);
+                await job.updateProgress(90);
+                const result = {
+                    scanId,
+                    address,
+                    identity: { ens: null, twitter: null, lens: null, farcaster: null, xResults: [], web: [] },
+                    onchain: { txCount: 0, balanceEth: 0, balanceUsd: 0, lastActive: '', tokens: [], nfts: [], topContacts: [] },
+                    bridges: bridgeResult,
+                    exits,
+                    risk: this.buildRisk(exits, null),
+                    cachedAt: new Date().toISOString(),
+                };
+                await this.finalize(scanId, address, result, mode);
+                await job.updateProgress(100);
+                return result;
             }
             await job.updateProgress(10);
             const [identityResult, onchainResult] = await Promise.all([

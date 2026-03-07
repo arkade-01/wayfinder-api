@@ -30,7 +30,7 @@ let ScanController = class ScanController {
     }
     async create(dto, req) {
         const ip = this.getClientIp(req);
-        const scanType = dto.mode === create_scan_dto_1.ScanMode.QUICK ? 'quick' : 'full';
+        const scanType = dto.mode === create_scan_dto_1.ScanMode.BRIDGE ? 'bridge' : (dto.mode === create_scan_dto_1.ScanMode.QUICK ? 'quick' : 'full');
         const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, scanType);
         if (!allowed) {
             throw new common_1.ForbiddenException({

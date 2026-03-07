@@ -4,6 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export enum ScanMode {
   QUICK  = 'quick',   // identity only
   FULL   = 'full',    // identity + bridge + exits
+  BRIDGE = 'bridge',  // bridge + exits only (no identity)
 }
 
 export class CreateScanDto {

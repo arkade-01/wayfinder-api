@@ -27,7 +27,7 @@ export class ScanController {
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async create(@Body() dto: CreateScanDto, @Req() req: Request) {
     const ip = this.getClientIp(req);
-    const scanType = dto.mode === ScanMode.QUICK ? 'quick' : 'full';
+    const scanType = dto.mode === ScanMode.BRIDGE ? 'bridge' : (dto.mode === ScanMode.QUICK ? 'quick' : 'full');
     
     // Check rate limit
     const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, scanType);

@@ -39,11 +39,12 @@ export class ScanProcessor extends WorkerHost {
 
     try {
       // ── Step 1: Cache Check ──────────────────────────────────────────────
-      // For FULL scan: only use FULL cache
-      // For QUICK scan: try FULL first (has all data), then QUICK
+      // Each mode has its own cache; FULL can serve QUICK requests
       let cached: object | null = null;
       if (mode === ScanMode.FULL) {
         cached = await this.cache.get(address, 'full');
+      } else if (mode === ScanMode.BRIDGE) {
+        cached = await this.cache.get(address, 'bridge') || await this.cache.get(address, 'full');
       } else {
         cached = await this.cache.get(address, 'full') || await this.cache.get(address, 'quick');
       }
@@ -54,6 +55,37 @@ export class ScanProcessor extends WorkerHost {
           data: { status: 'COMPLETE', result: cached },
         });
         return cached as ScanResult;
+      }
+
+      // ── BRIDGE mode: skip identity, just do bridge + exits ───────────────
+      if (mode === ScanMode.BRIDGE) {
+        await job.updateProgress(20);
+        const bridgeResult = await this.bridge.trace(address);
+
+        await job.updateProgress(50);
+        const crossWalletExits = bridgeResult.transfers.filter((t) => t.crossWallet);
+
+        await job.updateProgress(70);
+        const exits: ExitWalletResult[] = await this.bridge.traceExits(
+          crossWalletExits,
+          EXIT_TRACE_DEPTH,
+        );
+
+        await job.updateProgress(90);
+        const result: ScanResult = {
+          scanId,
+          address,
+          identity: { ens: null, twitter: null, lens: null, farcaster: null, xResults: [], web: [] },
+          onchain:  { txCount: 0, balanceEth: 0, balanceUsd: 0, lastActive: '', tokens: [], nfts: [], topContacts: [] },
+          bridges:  bridgeResult,
+          exits,
+          risk:     this.buildRisk(exits, null),
+          cachedAt: new Date().toISOString(),
+        };
+
+        await this.finalize(scanId, address, result, mode);
+        await job.updateProgress(100);
+        return result;
       }
 
       // ── Step 2: Parallel identity + on-chain ─────────────────────────────

@@ -16,6 +16,7 @@ var ScanMode;
 (function (ScanMode) {
     ScanMode["QUICK"] = "quick";
     ScanMode["FULL"] = "full";
+    ScanMode["BRIDGE"] = "bridge";
 })(ScanMode || (exports.ScanMode = ScanMode = {}));
 class CreateScanDto {
     address;
