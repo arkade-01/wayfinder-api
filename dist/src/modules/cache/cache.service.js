@@ -18,9 +18,10 @@ let CacheService = class CacheService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async get(address) {
+    async get(address, mode) {
+        const key = mode ? `${address.toLowerCase()}:${mode}` : address.toLowerCase();
         const cached = await this.prisma.walletCache.findUnique({
-            where: { address: address.toLowerCase() },
+            where: { address: key },
         });
         if (!cached)
             return null;
@@ -28,18 +29,20 @@ let CacheService = class CacheService {
             return null;
         return cached.data;
     }
-    async set(address, data) {
+    async set(address, data, mode) {
+        const key = mode ? `${address.toLowerCase()}:${mode}` : address.toLowerCase();
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + bridges_1.CACHE_TTL_HOURS);
         await this.prisma.walletCache.upsert({
-            where: { address: address.toLowerCase() },
-            create: { address: address.toLowerCase(), data: data, expiresAt },
+            where: { address: key },
+            create: { address: key, data: data, expiresAt },
             update: { data: data, cachedAt: new Date(), expiresAt },
         });
     }
-    async invalidate(address) {
+    async invalidate(address, mode) {
+        const key = mode ? `${address.toLowerCase()}:${mode}` : address.toLowerCase();
         await this.prisma.walletCache.deleteMany({
-            where: { address: address.toLowerCase() },
+            where: { address: key },
         });
     }
 };

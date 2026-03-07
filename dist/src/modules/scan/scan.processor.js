@@ -40,9 +40,15 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
             data: { status: 'RUNNING' },
         });
         try {
-            const cached = await this.cache.get(address);
+            let cached = null;
+            if (mode === create_scan_dto_1.ScanMode.FULL) {
+                cached = await this.cache.get(address, 'full');
+            }
+            else {
+                cached = await this.cache.get(address, 'full') || await this.cache.get(address, 'quick');
+            }
             if (cached) {
-                this.logger.log(`Cache hit for ${address}`);
+                this.logger.log(`Cache hit for ${address} [${mode}]`);
                 await this.prisma.scan.update({
                     where: { id: scanId },
                     data: { status: 'COMPLETE', result: cached },
@@ -72,7 +78,7 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
                     risk: this.buildRisk([], identityResult.ens),
                     cachedAt: new Date().toISOString(),
                 };
-                await this.finalize(scanId, address, result);
+                await this.finalize(scanId, address, result, mode);
                 return result;
             }
             await job.updateProgress(50);
@@ -92,7 +98,7 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
                 risk: this.buildRisk(exits, identityResult.ens),
                 cachedAt: new Date().toISOString(),
             };
-            await this.finalize(scanId, address, result);
+            await this.finalize(scanId, address, result, mode);
             await job.updateProgress(100);
             return result;
         }
@@ -119,8 +125,8 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
             highValueBridge: exits.some((e) => parseFloat(e.amountUsd) > 10000),
         };
     }
-    async finalize(scanId, address, result) {
-        await this.cache.set(address, result);
+    async finalize(scanId, address, result, mode) {
+        await this.cache.set(address, result, mode);
         await this.prisma.scan.update({
             where: { id: scanId },
             data: { status: 'COMPLETE', result: result },

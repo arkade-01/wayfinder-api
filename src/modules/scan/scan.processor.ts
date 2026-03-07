@@ -39,9 +39,16 @@ export class ScanProcessor extends WorkerHost {
 
     try {
       // ── Step 1: Cache Check ──────────────────────────────────────────────
-      const cached = await this.cache.get(address);
+      // For FULL scan: only use FULL cache
+      // For QUICK scan: try FULL first (has all data), then QUICK
+      let cached: object | null = null;
+      if (mode === ScanMode.FULL) {
+        cached = await this.cache.get(address, 'full');
+      } else {
+        cached = await this.cache.get(address, 'full') || await this.cache.get(address, 'quick');
+      }
       if (cached) {
-        this.logger.log(`Cache hit for ${address}`);
+        this.logger.log(`Cache hit for ${address} [${mode}]`);
         await this.prisma.scan.update({
           where: { id: scanId },
           data: { status: 'COMPLETE', result: cached },
@@ -77,7 +84,7 @@ export class ScanProcessor extends WorkerHost {
           risk:     this.buildRisk([], identityResult.ens),
           cachedAt: new Date().toISOString(),
         };
-        await this.finalize(scanId, address, result);
+        await this.finalize(scanId, address, result, mode);
         return result;
       }
 
@@ -111,7 +118,7 @@ export class ScanProcessor extends WorkerHost {
         cachedAt: new Date().toISOString(),
       };
 
-      await this.finalize(scanId, address, result);
+      await this.finalize(scanId, address, result, mode);
       await job.updateProgress(100);
       return result;
 
@@ -141,8 +148,8 @@ export class ScanProcessor extends WorkerHost {
     };
   }
 
-  private async finalize(scanId: string, address: string, result: ScanResult) {
-    await this.cache.set(address, result);
+  private async finalize(scanId: string, address: string, result: ScanResult, mode: ScanMode) {
+    await this.cache.set(address, result, mode);
     await this.prisma.scan.update({
       where: { id: scanId },
       data: { status: 'COMPLETE', result: result as any },
