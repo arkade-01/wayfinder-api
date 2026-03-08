@@ -19,6 +19,7 @@ const bridge_service_1 = require("./modules/bridge/bridge.service");
 const bridge_controller_1 = require("./modules/bridge/bridge.controller");
 const report_service_1 = require("./modules/report/report.service");
 const scan_service_1 = require("./modules/scan/scan.service");
+const bulk_scan_service_1 = require("./modules/scan/bulk-scan.service");
 const scan_processor_1 = require("./modules/scan/scan.processor");
 const scan_controller_1 = require("./modules/scan/scan.controller");
 const ratelimit_module_1 = require("./modules/ratelimit/ratelimit.module");
@@ -51,6 +52,7 @@ exports.AppModule = AppModule = __decorate([
             bridge_service_1.BridgeService,
             report_service_1.ReportService,
             scan_service_1.ScanService,
+            bulk_scan_service_1.BulkScanService,
             scan_processor_1.ScanProcessor,
         ],
     })

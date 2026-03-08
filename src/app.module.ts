@@ -11,6 +11,7 @@ import { BridgeService } from './modules/bridge/bridge.service';
 import { BridgeController } from './modules/bridge/bridge.controller';
 import { ReportService } from './modules/report/report.service';
 import { ScanService } from './modules/scan/scan.service';
+import { BulkScanService } from './modules/scan/bulk-scan.service';
 import { ScanProcessor } from './modules/scan/scan.processor';
 import { ScanController } from './modules/scan/scan.controller';
 import { RateLimitModule } from './modules/ratelimit/ratelimit.module';
@@ -50,6 +51,7 @@ import { SCAN_QUEUE_NAME } from './common/constants/bridges';
     BridgeService,
     ReportService,
     ScanService,
+    BulkScanService,
     ScanProcessor,
   ],
 })

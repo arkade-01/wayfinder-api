@@ -16,15 +16,19 @@ exports.ScanController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const scan_service_1 = require("./scan.service");
+const bulk_scan_service_1 = require("./bulk-scan.service");
 const report_service_1 = require("../report/report.service");
 const ratelimit_service_1 = require("../ratelimit/ratelimit.service");
 const create_scan_dto_1 = require("./dto/create-scan.dto");
+const bulk_scan_dto_1 = require("./dto/bulk-scan.dto");
 let ScanController = class ScanController {
     scanService;
+    bulkScanService;
     reportService;
     rateLimitService;
-    constructor(scanService, reportService, rateLimitService) {
+    constructor(scanService, bulkScanService, reportService, rateLimitService) {
         this.scanService = scanService;
+        this.bulkScanService = bulkScanService;
         this.reportService = reportService;
         this.rateLimitService = rateLimitService;
     }
@@ -76,6 +80,49 @@ let ScanController = class ScanController {
     async findByAddress(address) {
         return this.scanService.findByAddress(address);
     }
+    async createBulk(dto, req) {
+        const ip = this.getClientIp(req);
+        const ethAddressRe = /^0x[0-9a-fA-F]{40}$/;
+        const invalidAddresses = dto.addresses.filter(a => !ethAddressRe.test(a));
+        if (invalidAddresses.length > 0) {
+            throw new common_1.BadRequestException({
+                error: 'Invalid addresses',
+                invalid: invalidAddresses.slice(0, 5),
+                message: `${invalidAddresses.length} invalid address(es) found`,
+            });
+        }
+        const scanType = dto.mode === create_scan_dto_1.ScanMode.BRIDGE ? 'bridge' : (dto.mode === create_scan_dto_1.ScanMode.QUICK ? 'quick' : 'full');
+        const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, scanType);
+        if (remaining < dto.addresses.length) {
+            throw new common_1.ForbiddenException({
+                error: 'Rate limit exceeded',
+                message: `You have ${remaining} ${scanType} scan(s) remaining. Requested ${dto.addresses.length}.`,
+                scanType,
+                limit,
+                remaining,
+                requested: dto.addresses.length,
+            });
+        }
+        for (let i = 0; i < dto.addresses.length; i++) {
+            await this.rateLimitService.increment(ip, scanType);
+        }
+        const result = await this.bulkScanService.createBulkJob(dto.addresses, dto.mode || create_scan_dto_1.ScanMode.QUICK, ip);
+        return {
+            ...result,
+            rateLimit: {
+                type: scanType,
+                remaining: remaining - dto.addresses.length,
+                limit,
+            },
+        };
+    }
+    async getBulkJob(jobId) {
+        const job = await this.bulkScanService.getJobStatus(jobId);
+        if (!job) {
+            throw new common_1.NotFoundException(`Bulk job ${jobId} not found`);
+        }
+        return job;
+    }
     getClientIp(req) {
         const forwarded = req.headers['x-forwarded-for'];
         if (forwarded) {
@@ -125,10 +172,31 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], ScanController.prototype, "findByAddress", null);
+__decorate([
+    (0, common_1.Post)('bulk'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.ACCEPTED),
+    (0, swagger_1.ApiOperation)({ summary: 'Submit multiple wallets for scanning' }),
+    (0, swagger_1.ApiResponse)({ status: 202, description: 'Bulk job created, returns jobId' }),
+    (0, swagger_1.ApiResponse)({ status: 429, description: 'Rate limit exceeded' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [bulk_scan_dto_1.BulkScanDto, Object]),
+    __metadata("design:returntype", Promise)
+], ScanController.prototype, "createBulk", null);
+__decorate([
+    (0, common_1.Get)('bulk/:jobId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get bulk scan job status and results' }),
+    __param(0, (0, common_1.Param)('jobId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ScanController.prototype, "getBulkJob", null);
 exports.ScanController = ScanController = __decorate([
     (0, swagger_1.ApiTags)('scans'),
     (0, common_1.Controller)('scan'),
     __metadata("design:paramtypes", [scan_service_1.ScanService,
+        bulk_scan_service_1.BulkScanService,
         report_service_1.ReportService,
         ratelimit_service_1.RateLimitService])
 ], ScanController);

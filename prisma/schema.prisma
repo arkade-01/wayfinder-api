@@ -72,17 +72,20 @@ model WalletCache {
 // ── Bulk Jobs ──────────────────────────────────────────────────────────────────
 model BulkJob {
   id        String        @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String        @db.ObjectId
+  userId    String?       @db.ObjectId
+  ip        String?
   addresses String[]
+  mode      String        @default("quick")
   status    BulkJobStatus @default(PENDING)
   progress  Int           @default(0)
   total     Int
+  scanIds   String[]      @default([])
   reportUrl String?
   result    Json?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
 
   @@map("bulk_jobs")
 }
