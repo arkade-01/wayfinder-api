@@ -34,6 +34,22 @@ export class IdentityService {
     } catch (e) {
       this.logger.warn(`web3.bio failed for ${address}: ${e.message}`);
     }
+
+    // ── ENS fallback via ENSideas if web3.bio missed it ──────────────────────
+    if (!result.ens) {
+      try {
+        const { data } = await axios.get(
+          `https://api.ensideas.com/ens/resolve/${address}`,
+          { timeout: 8000 },
+        );
+        if (data?.name && !data.name.startsWith('0x')) {
+          result.ens = data.name;
+        }
+      } catch (e) {
+        this.logger.warn(`ENSideas fallback failed for ${address}: ${e.message}`);
+      }
+    }
+
     return result;
   }
 
@@ -117,7 +133,7 @@ export class IdentityService {
             name:      user.name,
             followers: user.followers_count,
             bio:       (user.description || '').slice(0, 150),
-            score:     this.scoreUser(user, address),
+            score:     this.scoreUser(user, address, ens),
             tweetUrl: `https://x.com/${user.screen_name}/status/${tweet.id_str}`,
           });
         }
@@ -126,7 +142,10 @@ export class IdentityService {
       }
     }
 
-    return results.sort((a, b) => b.score - a.score).slice(0, 5);
+    return results
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
   }
 
   // ── Serper — web search ─────────────────────────────────────────────────────
@@ -166,13 +185,27 @@ export class IdentityService {
     return false;
   }
 
-  private scoreUser(user: any, address: string): number {
+  private scoreUser(user: any, address: string, ens?: string | null): number {
     let score = 0;
-    const bio = (user.description || '').toLowerCase();
-    if (bio.includes(address.toLowerCase())) score += 50;
-    if (user.followers_count > 1000) score += 15;
-    else if (user.followers_count > 100) score += 5;
-    if (user.verified) score += 10;
+    const bio      = (user.description || '').toLowerCase();
+    const username = (user.screen_name || '').toLowerCase();
+    const name     = (user.name || '').toLowerCase();
+    const addr     = address.toLowerCase();
+    const ensName  = ens ? ens.toLowerCase().replace('.eth', '') : null;
+
+    // Strong signals
+    if (bio.includes(addr))                                  score += 60;
+    if (bio.includes(addr.slice(0, 10)))                     score += 30;
+    if (ensName && (bio.includes(ensName) || username.includes(ensName) || name.includes(ensName))) score += 40;
+
+    // Follower credibility
+    if (user.followers_count > 10000)      score += 20;
+    else if (user.followers_count > 1000)  score += 12;
+    else if (user.followers_count > 100)   score += 5;
+
+    if (user.verified)                                        score += 15;
+    if (user.profile_image_url && !user.default_profile_image) score += 5;
+
     return score;
   }
 }

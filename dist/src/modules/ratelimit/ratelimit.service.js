@@ -17,6 +17,7 @@ const LIMITS = {
     quick: 3,
     full: 1,
     bridge: 1,
+    bulk: 1,
 };
 const TTL_SECONDS = 24 * 60 * 60;
 let RateLimitService = RateLimitService_1 = class RateLimitService {
@@ -60,10 +61,11 @@ let RateLimitService = RateLimitService_1 = class RateLimitService {
     }
     async getLimits(ip) {
         const resetsAt = this.getResetTime();
-        const [quickUsed, fullUsed, bridgeUsed] = await Promise.all([
+        const [quickUsed, fullUsed, bridgeUsed, bulkUsed] = await Promise.all([
             this.redis.get(this.getKey(ip, 'quick')),
             this.redis.get(this.getKey(ip, 'full')),
             this.redis.get(this.getKey(ip, 'bridge')),
+            this.redis.get(this.getKey(ip, 'bulk')),
         ]);
         return {
             quick: {
@@ -79,6 +81,11 @@ let RateLimitService = RateLimitService_1 = class RateLimitService {
             bridge: {
                 used: parseInt(bridgeUsed || '0'),
                 limit: LIMITS.bridge,
+                resetsAt,
+            },
+            bulk: {
+                used: parseInt(bulkUsed || '0'),
+                limit: LIMITS.bulk,
                 resetsAt,
             },
         };

@@ -5,12 +5,14 @@ export interface ScanLimits {
   quick: { used: number; limit: number; resetsAt: string };
   full: { used: number; limit: number; resetsAt: string };
   bridge: { used: number; limit: number; resetsAt: string };
+  bulk: { used: number; limit: number; resetsAt: string };
 }
 
 const LIMITS = {
   quick: 3,   // Basic identity scan
   full: 1,    // Deep scan
   bridge: 1,  // Bridge trace
+  bulk: 1,    // Bulk job (up to 50 wallets)
 };
 
 const TTL_SECONDS = 24 * 60 * 60; // 24 hours
@@ -39,7 +41,7 @@ export class RateLimitService {
     return tomorrow.toISOString();
   }
 
-  async checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge'): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  async checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<{ allowed: boolean; remaining: number; limit: number }> {
     const key = this.getKey(ip, scanType);
     const limit = LIMITS[scanType];
     
@@ -53,7 +55,7 @@ export class RateLimitService {
     };
   }
 
-  async increment(ip: string, scanType: 'quick' | 'full' | 'bridge'): Promise<void> {
+  async increment(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<void> {
     const key = this.getKey(ip, scanType);
     
     const exists = await this.redis.exists(key);
@@ -69,10 +71,11 @@ export class RateLimitService {
   async getLimits(ip: string): Promise<ScanLimits> {
     const resetsAt = this.getResetTime();
     
-    const [quickUsed, fullUsed, bridgeUsed] = await Promise.all([
+    const [quickUsed, fullUsed, bridgeUsed, bulkUsed] = await Promise.all([
       this.redis.get(this.getKey(ip, 'quick')),
       this.redis.get(this.getKey(ip, 'full')),
       this.redis.get(this.getKey(ip, 'bridge')),
+      this.redis.get(this.getKey(ip, 'bulk')),
     ]);
 
     return {
@@ -89,6 +92,11 @@ export class RateLimitService {
       bridge: {
         used: parseInt(bridgeUsed || '0'),
         limit: LIMITS.bridge,
+        resetsAt,
+      },
+      bulk: {
+        used: parseInt(bulkUsed || '0'),
+        limit: LIMITS.bulk,
         resetsAt,
       },
     };

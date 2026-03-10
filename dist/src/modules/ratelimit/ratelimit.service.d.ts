@@ -14,6 +14,11 @@ export interface ScanLimits {
         limit: number;
         resetsAt: string;
     };
+    bulk: {
+        used: number;
+        limit: number;
+        resetsAt: string;
+    };
 }
 export declare class RateLimitService {
     private readonly logger;
@@ -21,11 +26,11 @@ export declare class RateLimitService {
     constructor();
     private getKey;
     private getResetTime;
-    checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge'): Promise<{
+    checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<{
         allowed: boolean;
         remaining: number;
         limit: number;
     }>;
-    increment(ip: string, scanType: 'quick' | 'full' | 'bridge'): Promise<void>;
+    increment(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<void>;
     getLimits(ip: string): Promise<ScanLimits>;
 }

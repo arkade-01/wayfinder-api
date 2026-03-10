@@ -91,27 +91,23 @@ let ScanController = class ScanController {
                 message: `${invalidAddresses.length} invalid address(es) found`,
             });
         }
-        const scanType = dto.mode === create_scan_dto_1.ScanMode.BRIDGE ? 'bridge' : (dto.mode === create_scan_dto_1.ScanMode.QUICK ? 'quick' : 'full');
-        const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, scanType);
-        if (remaining < dto.addresses.length) {
+        const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, 'bulk');
+        if (!allowed) {
             throw new common_1.ForbiddenException({
                 error: 'Rate limit exceeded',
-                message: `You have ${remaining} ${scanType} scan(s) remaining. Requested ${dto.addresses.length}.`,
-                scanType,
+                message: `You have reached your daily limit of ${limit} bulk scan(s). Resets at midnight UTC.`,
+                scanType: 'bulk',
                 limit,
-                remaining,
-                requested: dto.addresses.length,
+                remaining: 0,
             });
         }
-        for (let i = 0; i < dto.addresses.length; i++) {
-            await this.rateLimitService.increment(ip, scanType);
-        }
+        await this.rateLimitService.increment(ip, 'bulk');
         const result = await this.bulkScanService.createBulkJob(dto.addresses, dto.mode || create_scan_dto_1.ScanMode.QUICK, ip);
         return {
             ...result,
             rateLimit: {
-                type: scanType,
-                remaining: remaining - dto.addresses.length,
+                type: 'bulk',
+                remaining: remaining - 1,
                 limit,
             },
         };
