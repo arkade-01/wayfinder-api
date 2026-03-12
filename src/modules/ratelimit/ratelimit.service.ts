@@ -42,6 +42,11 @@ export class RateLimitService {
   }
 
   async checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+    // Beta mode: bypass all limits
+    if (process.env.BETA_MODE === 'true') {
+      return { allowed: true, remaining: 999, limit: 999 };
+    }
+
     const key = this.getKey(ip, scanType);
     const limit = LIMITS[scanType];
     

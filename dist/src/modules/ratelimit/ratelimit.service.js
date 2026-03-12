@@ -40,6 +40,9 @@ let RateLimitService = RateLimitService_1 = class RateLimitService {
         return tomorrow.toISOString();
     }
     async checkLimit(ip, scanType) {
+        if (process.env.BETA_MODE === 'true') {
+            return { allowed: true, remaining: 999, limit: 999 };
+        }
         const key = this.getKey(ip, scanType);
         const limit = LIMITS[scanType];
         const used = parseInt(await this.redis.get(key) || '0');
