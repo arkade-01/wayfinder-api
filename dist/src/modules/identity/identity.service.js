@@ -96,48 +96,105 @@ let IdentityService = IdentityService_1 = class IdentityService {
             topContacts,
         };
     }
-    async searchX(address, ens) {
+    async searchX(address, ens, farcaster = null) {
         const key = this.config.get('SOCIALDATA_API_KEY');
         const headers = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
-        const queries = [address];
-        if (ens) {
-            queries.push(ens);
-            queries.push(ens.replace('.eth', ''));
-        }
         const results = [];
         const seen = new Set();
-        for (const q of queries) {
+        if (ens) {
+            const ensHandle = ens.replace('.eth', '');
             try {
-                const { data } = await axios_1.default.get('https://api.socialdata.tools/twitter/search', {
-                    headers,
-                    params: { query: q, type: 'Latest' },
-                    timeout: 10000,
-                });
-                for (const tweet of data?.tweets || []) {
-                    const user = tweet.user || {};
-                    if (seen.has(user.id_str))
-                        continue;
-                    seen.add(user.id_str);
-                    if (this.isBot(user))
-                        continue;
+                const { data } = await axios_1.default.get(`https://api.socialdata.tools/twitter/user/${ensHandle}`, { headers, timeout: 8000 });
+                if (data?.id_str && !this.isBot(data)) {
+                    seen.add(data.id_str);
+                    const score = this.scoreUser(data, address, ens);
                     results.push({
-                        username: user.screen_name,
-                        name: user.name,
-                        followers: user.followers_count,
-                        bio: (user.description || '').slice(0, 150),
-                        score: this.scoreUser(user, address, ens),
-                        tweetUrl: `https://x.com/${user.screen_name}/status/${tweet.id_str}`,
+                        username: data.screen_name,
+                        name: data.name,
+                        followers: data.followers_count,
+                        bio: (data.description || '').slice(0, 150),
+                        score: score + 50,
+                        tweetUrl: `https://x.com/${data.screen_name}`,
+                        confidence: 'high',
                     });
                 }
             }
             catch (e) {
-                this.logger.warn(`SocialData failed for ${q}: ${e.message}`);
+                this.logger.warn(`ENS handle lookup failed for ${ensHandle}: ${e.message}`);
+            }
+        }
+        if (farcaster && results.length === 0) {
+            try {
+                const { data } = await axios_1.default.get(`https://api.web3.bio/profile/farcaster/${farcaster}`, { timeout: 8000 });
+                const profiles = Array.isArray(data) ? data : [];
+                const twitterProfile = profiles.find((p) => (p.platform || '').toLowerCase() === 'twitter');
+                if (twitterProfile?.identity) {
+                    try {
+                        const { data: tUser } = await axios_1.default.get(`https://api.socialdata.tools/twitter/user/${twitterProfile.identity}`, { headers, timeout: 8000 });
+                        if (tUser?.id_str && !seen.has(tUser.id_str) && !this.isBot(tUser)) {
+                            seen.add(tUser.id_str);
+                            results.push({
+                                username: tUser.screen_name,
+                                name: tUser.name,
+                                followers: tUser.followers_count,
+                                bio: (tUser.description || '').slice(0, 150),
+                                score: this.scoreUser(tUser, address, ens) + 40,
+                                tweetUrl: `https://x.com/${tUser.screen_name}`,
+                                confidence: 'high',
+                            });
+                        }
+                    }
+                    catch (e) {
+                        this.logger.warn(`Farcaster Twitter lookup failed: ${e.message}`);
+                    }
+                }
+            }
+            catch (e) {
+                this.logger.warn(`Farcaster cross-ref failed for ${farcaster}: ${e.message}`);
+            }
+        }
+        if (results.length === 0) {
+            const queries = [address];
+            if (ens) {
+                queries.push(ens);
+                queries.push(ens.replace('.eth', ''));
+            }
+            for (const q of queries) {
+                try {
+                    const { data } = await axios_1.default.get('https://api.socialdata.tools/twitter/search', {
+                        headers,
+                        params: { query: q, type: 'Latest' },
+                        timeout: 10000,
+                    });
+                    for (const tweet of data?.tweets || []) {
+                        const user = tweet.user || {};
+                        if (seen.has(user.id_str))
+                            continue;
+                        seen.add(user.id_str);
+                        if (this.isBot(user))
+                            continue;
+                        const score = this.scoreUser(user, address, ens);
+                        if (score < 30)
+                            continue;
+                        results.push({
+                            username: user.screen_name,
+                            name: user.name,
+                            followers: user.followers_count,
+                            bio: (user.description || '').slice(0, 150),
+                            score,
+                            tweetUrl: `https://x.com/${user.screen_name}/status/${tweet.id_str}`,
+                            confidence: score >= 50 ? 'high' : 'possible',
+                        });
+                    }
+                }
+                catch (e) {
+                    this.logger.warn(`SocialData search failed for ${q}: ${e.message}`);
+                }
             }
         }
         return results
-            .filter((r) => r.score > 0)
             .sort((a, b) => b.score - a.score)
-            .slice(0, 3);
+            .slice(0, 1);
     }
     async searchWeb(address, ens) {
         const key = this.config.get('SERPER_API_KEY');

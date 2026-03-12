@@ -18,6 +18,7 @@ export interface XResult {
     bio: string;
     score: number;
     tweetUrl: string;
+    confidence: 'confirmed' | 'high' | 'possible';
 }
 export interface WalletOnchain {
     balanceEth: number;

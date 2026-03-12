@@ -98,7 +98,7 @@ export class ScanProcessor extends WorkerHost {
       // ── Step 3: X/Twitter + web search using ENS if found ────────────────
       await job.updateProgress(30);
       const [xResults, webResults] = await Promise.all([
-        this.identity.searchX(address, identityResult.ens),
+        this.identity.searchX(address, identityResult.ens, identityResult.farcaster),
         this.identity.searchWeb(address, identityResult.ens),
       ]);
 

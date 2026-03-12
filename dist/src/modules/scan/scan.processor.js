@@ -87,7 +87,7 @@ let ScanProcessor = ScanProcessor_1 = class ScanProcessor extends bullmq_1.Worke
             ]);
             await job.updateProgress(30);
             const [xResults, webResults] = await Promise.all([
-                this.identity.searchX(address, identityResult.ens),
+                this.identity.searchX(address, identityResult.ens, identityResult.farcaster),
                 this.identity.searchWeb(address, identityResult.ens),
             ]);
             identityResult.xResults = xResults;

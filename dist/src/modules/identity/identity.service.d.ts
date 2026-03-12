@@ -6,7 +6,7 @@ export declare class IdentityService {
     constructor(config: ConfigService);
     resolve(address: string): Promise<WalletIdentity>;
     getOnchain(address: string): Promise<WalletOnchain>;
-    searchX(address: string, ens: string | null): Promise<XResult[]>;
+    searchX(address: string, ens: string | null, farcaster?: string | null): Promise<XResult[]>;
     searchWeb(address: string, ens: string | null): Promise<WebResult[]>;
     private isBot;
     private scoreUser;
