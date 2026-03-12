@@ -4,7 +4,9 @@ export declare class RateLimitController {
     constructor(rateLimitService: RateLimitService);
     getLimits(req: any): Promise<{
         ip: string;
-        limits: import("./ratelimit.service").ScanLimits;
+        limits: import("./ratelimit.service").ScanLimits & {
+            betaMode: boolean;
+        };
     }>;
     private getClientIp;
     private maskIp;

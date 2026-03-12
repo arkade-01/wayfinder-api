@@ -32,5 +32,8 @@ export declare class RateLimitService {
         limit: number;
     }>;
     increment(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<void>;
-    getLimits(ip: string): Promise<ScanLimits>;
+    isBetaMode(): boolean;
+    getLimits(ip: string): Promise<ScanLimits & {
+        betaMode: boolean;
+    }>;
 }

@@ -73,8 +73,24 @@ export class RateLimitService {
     this.logger.log(`Rate limit incremented for ${ip} [${scanType}]`);
   }
 
-  async getLimits(ip: string): Promise<ScanLimits> {
+  isBetaMode(): boolean {
+    return process.env.BETA_MODE === 'true';
+  }
+
+  async getLimits(ip: string): Promise<ScanLimits & { betaMode: boolean }> {
     const resetsAt = this.getResetTime();
+
+    // Beta mode: return unlimited limits
+    if (this.isBetaMode()) {
+      const unlimited = { used: 0, limit: 0, resetsAt };
+      return {
+        betaMode: true,
+        quick: unlimited,
+        full: unlimited,
+        bridge: unlimited,
+        bulk: unlimited,
+      };
+    }
     
     const [quickUsed, fullUsed, bridgeUsed, bulkUsed] = await Promise.all([
       this.redis.get(this.getKey(ip, 'quick')),
@@ -84,6 +100,7 @@ export class RateLimitService {
     ]);
 
     return {
+      betaMode: false,
       quick: {
         used: parseInt(quickUsed || '0'),
         limit: LIMITS.quick,
