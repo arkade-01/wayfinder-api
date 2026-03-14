@@ -30,6 +30,12 @@ export class IdentityService {
         if (plt === 'twitter')   result.twitter   = p.identity;
         if (plt === 'lens')      result.lens      = p.identity;
         if (plt === 'farcaster') result.farcaster = p.identity;
+
+        // Also extract Twitter from the profile's links object (e.g. ENS profiles
+        // link Twitter via `links.twitter.handle` even without a top-level twitter entry)
+        if (!result.twitter && p.links?.twitter?.handle) {
+          result.twitter = p.links.twitter.handle;
+        }
       }
     } catch (e) {
       this.logger.warn(`web3.bio failed for ${address}: ${e.message}`);
@@ -102,14 +108,39 @@ export class IdentityService {
   }
 
   // ── SocialData — X/Twitter search ──────────────────────────────────────────
-  async searchX(address: string, ens: string | null, farcaster: string | null = null): Promise<XResult[]> {
+  async searchX(address: string, ens: string | null, farcaster: string | null = null, knownTwitter: string | null = null): Promise<XResult[]> {
     const key     = this.config.get('SOCIALDATA_API_KEY');
     const headers = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
     const results: XResult[] = [];
     const seen    = new Set<string>();
 
-    // ── 1. Direct ENS handle lookup (highest confidence) ────────────────────
-    if (ens) {
+    // ── 0. Known Twitter handle (from web3.bio links — highest confidence) ──
+    if (knownTwitter) {
+      try {
+        const { data } = await axios.get(
+          `https://api.socialdata.tools/twitter/user/${knownTwitter}`,
+          { headers, timeout: 8000 },
+        );
+        if (data?.id_str && !this.isBot(data)) {
+          seen.add(data.id_str);
+          const score = this.scoreUser(data, address, ens);
+          results.push({
+            username:   data.screen_name,
+            name:       data.name,
+            followers:  data.followers_count,
+            bio:        (data.description || '').slice(0, 150),
+            score:      score + 70, // highest bonus — directly linked via web3.bio
+            tweetUrl:   `https://x.com/${data.screen_name}`,
+            confidence: 'high',
+          });
+        }
+      } catch (e) {
+        this.logger.warn(`Known Twitter handle lookup failed for ${knownTwitter}: ${e.message}`);
+      }
+    }
+
+    // ── 1. Direct ENS handle lookup (only if no known twitter and handle differs) ─
+    if (!knownTwitter && ens) {
       const ensHandle = ens.replace('.eth', '');
       try {
         const { data } = await axios.get(
