@@ -3,7 +3,7 @@ import { mainnet } from 'viem/chains';
 
 const client = createPublicClient({
   chain: mainnet,
-  transport: http('https://cloudflare-eth.com'),
+  transport: http('https://eth.drpc.org'),
 });
 
 export const ENS_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.eth$/;
