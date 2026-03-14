@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateScanDto, ScanMode } from './dto/create-scan.dto';
 import { SCAN_QUEUE_NAME } from '../../common/constants/bridges';
 import { ScanJobData } from './scan.processor';
+import { isEnsName, resolveEns } from '../../common/utils/ens';
 
 @Injectable()
 export class ScanService {
@@ -14,9 +15,25 @@ export class ScanService {
   ) {}
 
   async create(dto: CreateScanDto, userId?: string) {
+    let resolvedAddress = dto.address.toLowerCase();
+    let ensName: string | undefined;
+
+    // If the input is an ENS name, resolve it first
+    if (isEnsName(dto.address)) {
+      const addr = await resolveEns(dto.address);
+      if (!addr) {
+        throw new BadRequestException(
+          `ENS name "${dto.address}" could not be resolved to an address`,
+        );
+      }
+      ensName = dto.address.toLowerCase();
+      resolvedAddress = addr.toLowerCase();
+    }
+
     const scan = await this.prisma.scan.create({
       data: {
-        address:  dto.address.toLowerCase(),
+        address:  resolvedAddress,
+        ensName:  ensName ?? null,
         status:   'PENDING',
         userId:   userId || null,
       },
@@ -35,7 +52,7 @@ export class ScanService {
       removeOnFail:     50,
     });
 
-    return { scanId: scan.id, status: 'PENDING' };
+    return { scanId: scan.id, status: 'PENDING', address: scan.address, ensName: scan.ensName ?? undefined };
   }
 
   async findOne(scanId: string) {

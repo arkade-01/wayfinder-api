@@ -38,6 +38,7 @@ model Scan {
   id        String     @id @default(auto()) @map("_id") @db.ObjectId
   userId    String?    @db.ObjectId
   address   String
+  ensName   String?    // original ENS input, if resolved
   status    ScanStatus @default(PENDING)
   result    Json?      // full ScanResult document embedded
   pdfUrl    String?
