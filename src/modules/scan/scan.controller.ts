@@ -64,6 +64,9 @@ export class ScanController {
   @Get(':id')
   @ApiOperation({ summary: 'Get scan results by scanId' })
   async findOne(@Param('id') id: string) {
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      throw new BadRequestException('Invalid scan ID format. ID must be a 24-character hex string.');
+    }
     return this.scanService.findOne(id);
   }
 
@@ -72,6 +75,9 @@ export class ScanController {
   @ApiProduces('application/pdf')
   @ApiResponse({ status: 200, description: 'PDF report for the scan' })
   async getReport(@Param('id') id: string, @Res() res: Response) {
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      throw new BadRequestException('Invalid scan ID format. ID must be a 24-character hex string.');
+    }
     const scan = await this.scanService.findOne(id);
 
     if (scan.status !== 'COMPLETE') {
@@ -159,6 +165,9 @@ export class ScanController {
   @Get('bulk/:jobId')
   @ApiOperation({ summary: 'Get bulk scan job status and results' })
   async getBulkJob(@Param('jobId') jobId: string) {
+    if (!/^[0-9a-fA-F]{24}$/.test(jobId)) {
+      throw new BadRequestException('Invalid bulk job ID format. ID must be a 24-character hex string.');
+    }
     const job = await this.bulkScanService.getJobStatus(jobId);
     if (!job) {
       throw new NotFoundException(`Bulk job ${jobId} not found`);

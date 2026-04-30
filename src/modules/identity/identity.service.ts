@@ -12,7 +12,7 @@ export class IdentityService {
 
   constructor(private config: ConfigService) {}
 
-  // ── web3.bio — ENS, Lens, Farcaster ────────────────────────────────────────
+  // ── \.bio — ENS, Lens, Farcaster ────────────────────────────────────────
   async resolve(address: string): Promise<WalletIdentity> {
     const result: WalletIdentity = {
       ens: null, twitter: null, lens: null,
