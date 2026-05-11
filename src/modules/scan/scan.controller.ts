@@ -114,7 +114,6 @@ export class ScanController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Submit multiple wallets for scanning' })
   @ApiResponse({ status: 202, description: 'Bulk job created, returns jobId' })
-  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async createBulk(@Body() dto: BulkScanDto, @Req() req: Request) {
     const ip = this.getClientIp(req);
     
@@ -129,22 +128,6 @@ export class ScanController {
       });
     }
 
-    // Check separate bulk rate limit (1 job per day)
-    const { allowed, remaining, limit } = await this.rateLimitService.checkLimit(ip, 'bulk');
-    
-    if (!allowed) {
-      throw new ForbiddenException({
-        error: 'Rate limit exceeded',
-        message: `You have reached your daily limit of ${limit} bulk scan(s). Resets at midnight UTC.`,
-        scanType: 'bulk',
-        limit,
-        remaining: 0,
-      });
-    }
-
-    // Increment bulk usage
-    await this.rateLimitService.increment(ip, 'bulk');
-
     // Create bulk job
     const result = await this.bulkScanService.createBulkJob(
       dto.addresses,
@@ -152,14 +135,7 @@ export class ScanController {
       ip,
     );
 
-    return {
-      ...result,
-      rateLimit: {
-        type: 'bulk',
-        remaining: remaining - 1,
-        limit,
-      },
-    };
+    return result;
   }
 
   @Get('bulk/:jobId')
