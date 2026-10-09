@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { SOL_GRAPH_QUEUE_NAME } from '../solana.constants';
+import { GRAPH_VERSION, SOL_GRAPH_QUEUE_NAME } from '../solana.constants';
 import { WalletGraphJobData } from './wallet-graph.processor';
 
 const RESULT_TTL_MS = 12 * 60 * 60 * 1000;
@@ -25,7 +25,9 @@ export class WalletGraphService {
         },
         orderBy: { createdAt: 'desc' },
       });
-      if (recent)
+      const recentVersion = (recent?.result as { version?: number } | null)
+        ?.version;
+      if (recent && recentVersion === GRAPH_VERSION)
         return {
           scanId: recent.id,
           status: recent.status,

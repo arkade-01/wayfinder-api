@@ -56,7 +56,14 @@ function extractNative(ix: AnyIx): NativeTransfer | null {
       lamports: Number(info.lamports ?? 0),
     };
   }
-  if (SYSTEM_CREATE_TYPES.has(type) && info.source && info.newAccount) {
+  // createAccount also funds rent for token/program accounts (temp WSOL, ATAs,
+  // pool state) — those aren't wallets, so only count system-owned creations.
+  if (
+    SYSTEM_CREATE_TYPES.has(type) &&
+    info.source &&
+    info.newAccount &&
+    info.owner === '11111111111111111111111111111111'
+  ) {
     return {
       from: info.source,
       to: info.newAccount,

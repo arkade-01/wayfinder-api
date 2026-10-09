@@ -62,7 +62,12 @@ describe('tx-parser', () => {
                 program: 'system',
                 parsed: {
                   type: 'createAccount',
-                  info: { source: T, newAccount: C, lamports: 5000 },
+                  info: {
+                    source: T,
+                    newAccount: C,
+                    lamports: 5000,
+                    owner: '11111111111111111111111111111111',
+                  },
                 },
               },
             ],
@@ -149,5 +154,138 @@ describe('signals', () => {
     set.add(C, { signal: 'SWEEP_IN', signatures: [], detail: '' });
     set.add(P, { signal: 'FEE_PAYER', signatures: [], detail: '' });
     expect(set.ranked().map((c) => c.address)).toEqual([P, C]);
+  });
+});
+
+describe('profileAddress (hub vs degen)', () => {
+  const { profileAddress } = require('./signals');
+  const L = {
+    hubDistinctWallets: 25,
+    hubSponsoredSigners: 5,
+    activeTraderTxs: 90,
+  };
+  const wallets = (n: number, p: string) =>
+    Array.from({ length: n }, (_, i) => `${p}${i}`);
+  const A = 'Addr';
+
+  it('busy trader touching few wallets is an active trader, not a hub', () => {
+    const txs = Array.from({ length: 100 }, (_, i) =>
+      tx(`s${i}`, {
+        feePayer: A,
+        signers: [A],
+        nativeTransfers: [{ from: A, to: `Fee${i % 3}`, lamports: 0.01 * SOL }],
+      }),
+    );
+    expect(profileAddress(A, txs, () => true, L).kind).toBe('active_trader');
+  });
+
+  it('sending to many distinct wallets is a distributor', () => {
+    const txs = wallets(30, 'W').map((w, i) =>
+      tx(`d${i}`, {
+        feePayer: A,
+        signers: [A],
+        nativeTransfers: [{ from: A, to: w, lamports: SOL }],
+      }),
+    );
+    expect(profileAddress(A, txs, () => true, L).kind).toBe('distributor');
+  });
+
+  it('receiving from many distinct wallets is a collector', () => {
+    const txs = wallets(30, 'W').map((w, i) =>
+      tx(`c${i}`, {
+        feePayer: w,
+        signers: [w],
+        nativeTransfers: [{ from: w, to: A, lamports: 0.01 * SOL }],
+      }),
+    );
+    expect(profileAddress(A, txs, () => true, L).kind).toBe('collector');
+  });
+
+  it('paying fees for many signers is a sponsor', () => {
+    const txs = wallets(6, 'U').map((u, i) =>
+      tx(`p${i}`, { feePayer: A, signers: [A, u] }),
+    );
+    expect(profileAddress(A, txs, () => true, L).kind).toBe('sponsor');
+  });
+
+  it('non-wallet counterparties (pools, bonding curves) are ignored', () => {
+    const txs = wallets(60, 'Pool').map((w, i) =>
+      tx(`b${i}`, {
+        feePayer: A,
+        signers: [A],
+        nativeTransfers: [{ from: A, to: w, lamports: SOL }],
+      }),
+    );
+    expect(
+      profileAddress(A, txs, (a: string) => !a.startsWith('Pool'), L).kind,
+    ).toBe('normal');
+  });
+});
+
+describe('tx-parser createAccount', () => {
+  it('ignores createAccount for non-system owners (temp WSOL, ATAs)', () => {
+    const mk = (owner: string) =>
+      parseTransaction({
+        slot: 1,
+        blockTime: 1,
+        transaction: {
+          signatures: ['x'],
+          message: {
+            accountKeys: [{ pubkey: T, signer: true }],
+            instructions: [
+              {
+                program: 'system',
+                parsed: {
+                  type: 'createAccount',
+                  info: { source: T, newAccount: C, lamports: 2039280, owner },
+                },
+              },
+            ],
+          },
+        },
+        meta: { err: null },
+      })!;
+    expect(
+      mk('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').nativeTransfers,
+    ).toEqual([]);
+    expect(mk('11111111111111111111111111111111').nativeTransfers).toHaveLength(
+      1,
+    );
+  });
+});
+
+describe('profileAddress volume + spread', () => {
+  const { profileAddress } = require('./signals');
+  const L = {
+    hubDistinctWallets: 25,
+    hubDistinctWalletsBusy: 12,
+    hubSponsoredSigners: 5,
+    hubSponsoredSignersBusy: 3,
+    activeTraderTxs: 90,
+  };
+  const A = 'Addr';
+  const sendTo = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      tx(`v${i}`, {
+        feePayer: A,
+        signers: [A],
+        nativeTransfers: [{ from: A, to: `W${i}`, lamports: SOL }],
+      }),
+    );
+
+  it('busy + moderate spread is a hub', () => {
+    expect(profileAddress(A, sendTo(15), () => true, L, true).kind).toBe(
+      'distributor',
+    );
+  });
+  it('quiet + same moderate spread is not', () => {
+    expect(profileAddress(A, sendTo(15), () => true, L, false).kind).toBe(
+      'normal',
+    );
+  });
+  it('busy + low spread is an active trader (kept)', () => {
+    expect(profileAddress(A, sendTo(4), () => true, L, true).kind).toBe(
+      'active_trader',
+    );
   });
 });

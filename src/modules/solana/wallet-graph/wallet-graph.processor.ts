@@ -12,6 +12,7 @@ import {
   firstFunderOf,
 } from './signals';
 import {
+  GRAPH_VERSION,
   GRAPH_LIMITS,
   SIGNAL_WEIGHTS,
   SOL_GRAPH_QUEUE_NAME,
@@ -35,6 +36,7 @@ export interface WalletGraphResult {
   excluded: { address: string; reason: string }[];
   stats: { txsScanned: number; candidatesChecked: number };
   depth: 1;
+  version: number;
   scannedAt: string;
 }
 
@@ -115,11 +117,8 @@ export class WalletGraphProcessor extends WorkerHost {
           excluded.set(addr, 'not a wallet (program-owned account)'),
           false
         );
-      if (await this.entities.isExcluded(addr))
-        return (
-          excluded.set(addr, 'high-activity hub (likely CEX/relayer/bot)'),
-          false
-        );
+      const reason = await this.entities.exclusionReason(addr);
+      if (reason) return (excluded.set(addr, reason), false);
       return true;
     };
 
@@ -248,6 +247,12 @@ export class WalletGraphProcessor extends WorkerHost {
       .filter((c) => c.score >= MIN_REPORTED_SCORE)
       .slice(0, MAX_REPORTED);
 
+    // Tag busy trading wallets (profiles are cached from the exclusion check).
+    for (const c of candidates) {
+      const p = await this.entities.profile(c.address);
+      if (p?.kind === 'active_trader') c.tags = ['active trader'];
+    }
+
     return {
       address: target,
       funder,
@@ -258,6 +263,7 @@ export class WalletGraphProcessor extends WorkerHost {
       })),
       stats: { txsScanned: all.length, candidatesChecked: checked },
       depth: 1,
+      version: GRAPH_VERSION,
       scannedAt: new Date().toISOString(),
     };
   }

@@ -16,6 +16,8 @@ export interface Candidate {
   address: string;
   score: number;
   evidence: Evidence[];
+  /** e.g. 'active trader' — informational only, doesn't change the score. */
+  tags?: string[];
 }
 
 /** First wallet that sent SOL to `address`, scanning oldest-first txs. */
@@ -120,5 +122,95 @@ export class CandidateSet {
         score: combineScore(evidence),
       }))
       .sort((a, b) => b.score - a.score);
+  }
+}
+
+export type AddressKind =
+  | 'distributor'
+  | 'collector'
+  | 'sponsor'
+  | 'active_trader'
+  | 'normal';
+
+export interface AddressProfile {
+  kind: AddressKind;
+  /** 1000+ recent signatures. */
+  busy: boolean;
+  txsSampled: number;
+  distinctOut: number;
+  distinctIn: number;
+  sponsored: number;
+}
+
+/**
+ * Classifies an address from its recent txs by counterparty spread.
+ * `isWallet` should return true only for system-owned (plain wallet) accounts,
+ * so bonding curves, pools and token accounts never inflate the counts.
+ */
+export function profileAddress(
+  address: string,
+  recent: ParsedTx[],
+  isWallet: (addr: string) => boolean,
+  limits: {
+    hubDistinctWallets: number;
+    hubDistinctWalletsBusy: number;
+    hubSponsoredSigners: number;
+    hubSponsoredSignersBusy: number;
+    activeTraderTxs: number;
+  },
+  busy = false,
+  minLamports = GRAPH_LIMITS.minTransferLamports,
+): AddressProfile {
+  const out = new Set<string>();
+  const inn = new Set<string>();
+  const sponsored = new Set<string>();
+
+  for (const tx of recent) {
+    for (const t of tx.nativeTransfers) {
+      if (t.lamports < minLamports) continue;
+      if (t.from === address && t.to !== address && isWallet(t.to))
+        out.add(t.to);
+      if (t.to === address && t.from !== address && isWallet(t.from))
+        inn.add(t.from);
+    }
+    if (tx.feePayer === address) {
+      for (const s of tx.signers) if (s !== address) sponsored.add(s);
+    }
+  }
+
+  const base = {
+    busy,
+    txsSampled: recent.length,
+    distinctOut: out.size,
+    distinctIn: inn.size,
+    sponsored: sponsored.size,
+  };
+  // Volume lowers the bar; it never excludes on its own.
+  const spreadBar = busy
+    ? limits.hubDistinctWalletsBusy
+    : limits.hubDistinctWallets;
+  const sponsorBar = busy
+    ? limits.hubSponsoredSignersBusy
+    : limits.hubSponsoredSigners;
+
+  if (sponsored.size >= sponsorBar) return { ...base, kind: 'sponsor' };
+  if (out.size >= spreadBar) return { ...base, kind: 'distributor' };
+  if (inn.size >= spreadBar) return { ...base, kind: 'collector' };
+  if (busy || recent.length >= limits.activeTraderTxs)
+    return { ...base, kind: 'active_trader' };
+  return { ...base, kind: 'normal' };
+}
+
+export function describeHub(p: AddressProfile): string | null {
+  const n = `${p.txsSampled}${p.busy ? ' (high-activity address, 1000+ recent txs)' : ''}`;
+  switch (p.kind) {
+    case 'sponsor':
+      return `fee sponsor — paid fees for ${p.sponsored} different wallets in its last ${n} txs (relayer / embedded-wallet app)`;
+    case 'distributor':
+      return `distributor — sent SOL to ${p.distinctOut} different wallets in its last ${n} txs (exchange / airdrop / payout)`;
+    case 'collector':
+      return `fee collector — received SOL from ${p.distinctIn} different wallets in its last ${n} txs (bot / terminal fee wallet)`;
+    default:
+      return null;
   }
 }

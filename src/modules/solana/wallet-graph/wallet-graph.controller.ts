@@ -1,29 +1,21 @@
 import {
   BadRequestException,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
 import { WalletGraphService } from './wallet-graph.service';
-import { RateLimitService } from '../../ratelimit/ratelimit.service';
 import { SOLANA_ADDRESS_RE } from '../solana.constants';
-import { getClientIp } from '../../../common/utils/client-ip';
 
 @ApiTags('solana')
 @Controller('solana/wallets')
 export class WalletGraphController {
-  constructor(
-    private readonly graph: WalletGraphService,
-    private readonly rateLimit: RateLimitService,
-  ) {}
+  constructor(private readonly graph: WalletGraphService) {}
 
   @Post(':address/scan')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -35,36 +27,10 @@ export class WalletGraphController {
     required: false,
     description: 'Ignore a recent cached result',
   })
-  async scan(
-    @Param('address') address: string,
-    @Query('force') force: string,
-    @Req() req: Request,
-  ) {
+  async scan(@Param('address') address: string, @Query('force') force: string) {
     if (!SOLANA_ADDRESS_RE.test(address))
       throw new BadRequestException('Invalid Solana address');
-
-    const ip = getClientIp(req);
-    const { allowed, remaining, limit } = await this.rateLimit.checkLimit(
-      ip,
-      'sol_graph',
-    );
-    if (!allowed) {
-      throw new ForbiddenException({
-        error: 'Rate limit exceeded',
-        message: `Daily limit of ${limit} Solana wallet scans reached. Resets at midnight UTC.`,
-      });
-    }
-
-    const res = await this.graph.create(address, force === 'true');
-    if (!res.cached) await this.rateLimit.increment(ip, 'sol_graph');
-    return {
-      ...res,
-      rateLimit: {
-        type: 'sol_graph',
-        remaining: res.cached ? remaining : remaining - 1,
-        limit,
-      },
-    };
+    return this.graph.create(address, force === 'true');
   }
 
   @Get('scans/:id')
