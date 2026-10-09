@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
+import { redisOptions } from '../../common/utils/redis-options';
 
 export interface ScanLimits {
   quick: { used: number; limit: number; resetsAt: string };
@@ -26,8 +27,7 @@ export class RateLimitService {
 
   constructor() {
     this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+      ...redisOptions(),
       maxRetriesPerRequest: 3,
     });
   }
