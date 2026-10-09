@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule } from '@nestjs/throttler';
 
@@ -17,6 +17,7 @@ import { ScanController } from './modules/scan/scan.controller';
 import { RateLimitModule } from './modules/ratelimit/ratelimit.module';
 import { SCAN_QUEUE_NAME } from './common/constants/bridges';
 import { SolanaModule } from './modules/solana/solana.module';
+import { redisOptions } from './common/utils/redis-options';
 
 @Module({
   imports: [
@@ -28,12 +29,8 @@ import { SolanaModule } from './modules/solana/solana.module';
 
     // BullMQ — job queue backed by Redis
     BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6379),
-        },
+      useFactory: () => ({
+        connection: { ...redisOptions(), maxRetriesPerRequest: null },
       }),
     }),
 
