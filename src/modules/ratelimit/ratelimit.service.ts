@@ -13,7 +13,11 @@ const LIMITS = {
   full: 1,    // Deep scan
   bridge: 1,  // Bridge trace
   bulk: 1,    // Bulk job (up to 50 wallets)
+  sol_graph: 2, // Solana alt-wallet graph scan
+  og: 50,       // Solana OG token search (mostly cache hits)
 };
+
+export type ScanType = keyof typeof LIMITS;
 
 const TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
@@ -41,7 +45,7 @@ export class RateLimitService {
     return tomorrow.toISOString();
   }
 
-  async checkLimit(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  async checkLimit(ip: string, scanType: ScanType): Promise<{ allowed: boolean; remaining: number; limit: number }> {
     // Beta mode: bypass all limits
     if (process.env.BETA_MODE === 'true') {
       return { allowed: true, remaining: 999, limit: 999 };
@@ -60,7 +64,7 @@ export class RateLimitService {
     };
   }
 
-  async increment(ip: string, scanType: 'quick' | 'full' | 'bridge' | 'bulk'): Promise<void> {
+  async increment(ip: string, scanType: ScanType): Promise<void> {
     const key = this.getKey(ip, scanType);
     
     const exists = await this.redis.exists(key);
