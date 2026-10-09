@@ -28,7 +28,7 @@ export class HeliusService {
   constructor(config: ConfigService) {
     const key = config.get<string>('HELIUS_API_KEY');
     const url =
-      config.get<string>('HELIUS_RPC_URL') ??
+      config.get<string>('HELIUS_RPC_URL') ||
       `https://mainnet.helius-rpc.com/?api-key=${key}`;
     if (!key && !config.get('HELIUS_RPC_URL')) {
       this.logger.warn('HELIUS_API_KEY not set — Solana modules will fail');
@@ -84,7 +84,7 @@ export class HeliusService {
           sortOrder: opts.sortOrder,
           limit,
           encoding: 'jsonParsed',
-          maxSupportedTransactionVersion: 0,
+          maxSupportedTransactionVersion: 1,
           filters: { status: 'succeeded' },
           ...(paginationToken ? { paginationToken } : {}),
         },
@@ -165,6 +165,21 @@ export class HeliusService {
   }
 
   // ── Accounts ──────────────────────────────────────────────────────────────
+
+  /** Owner program per address (null = account doesn't exist / closed). Batches of 100. */
+  async getOwners(addresses: string[]): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    const unique = [...new Set(addresses)];
+    for (let i = 0; i < unique.length; i += 100) {
+      const chunk = unique.slice(i, i + 100);
+      const res = await this.rpc<{ value: ({ owner: string } | null)[] }>(
+        'getMultipleAccounts',
+        [chunk, { encoding: 'base64', dataSlice: { offset: 0, length: 0 } }],
+      );
+      chunk.forEach((a, j) => out.set(a, res.value?.[j]?.owner ?? null));
+    }
+    return out;
+  }
 
   async getAccountOwner(address: string): Promise<string | null> {
     const res = await this.rpc<{

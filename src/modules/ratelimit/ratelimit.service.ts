@@ -13,8 +13,6 @@ const LIMITS = {
   full: 1,    // Deep scan
   bridge: 1,  // Bridge trace
   bulk: 1,    // Bulk job (up to 50 wallets)
-  sol_graph: 2, // Solana alt-wallet graph scan
-  og: 50,       // Solana OG token search (mostly cache hits)
 };
 
 export type ScanType = keyof typeof LIMITS;
