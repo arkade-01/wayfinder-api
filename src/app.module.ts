@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule } from '@nestjs/throttler';
 
-import { PrismaService } from './prisma/prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
 import { CacheService } from './modules/cache/cache.service';
 import { IdentityService } from './modules/identity/identity.service';
 import { IdentityController } from './modules/identity/identity.controller';
@@ -16,6 +16,7 @@ import { ScanProcessor } from './modules/scan/scan.processor';
 import { ScanController } from './modules/scan/scan.controller';
 import { RateLimitModule } from './modules/ratelimit/ratelimit.module';
 import { SCAN_QUEUE_NAME } from './common/constants/bridges';
+import { SolanaModule } from './modules/solana/solana.module';
 
 @Module({
   imports: [
@@ -40,12 +41,17 @@ import { SCAN_QUEUE_NAME } from './common/constants/bridges';
 
     // Rate limiting per scan type
     RateLimitModule,
+
+    // Shared Prisma client (one connection pool)
+    PrismaModule,
+
+    // Solana: OG token finder + alt-wallet graph
+    SolanaModule,
   ],
 
   controllers: [IdentityController, BridgeController, ScanController],
 
   providers: [
-    PrismaService,
     CacheService,
     IdentityService,
     BridgeService,

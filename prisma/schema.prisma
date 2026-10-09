@@ -119,3 +119,61 @@ enum TransactionType {
   REFUND
   BONUS
 }
+
+// ── Solana: OG finder ──────────────────────────────────────────────────────────
+// Mint creation time never changes, so this is a permanent cache.
+model SolMintOrigin {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  mint              String    @unique
+  createdAtChain    DateTime? // blockTime of the mint's first tx
+  creationSignature String?
+  creationSlot      Int?
+  checkedAt         DateTime  @default(now())
+
+  @@map("sol_mint_origins")
+}
+
+// ── Solana: wallet graph (alt-wallet detection) ────────────────────────────────
+model SolWalletScan {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  address   String
+  status    ScanStatus @default(PENDING)
+  result    Json?
+  error     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([address])
+  @@map("sol_wallet_scans")
+}
+
+// Every link found, kept independently of scans so identities can later be
+// propagated across the graph (wallet → alt → social identity).
+model WalletEdge {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  chain      String   @default("solana")
+  from       String
+  to         String
+  signal     String   // FEE_PAYER | FUNDED_CHILD | SHARED_FUNDER | FUNDED_BY | SWEEP_OUT | SWEEP_IN
+  weight     Float
+  signatures String[]
+  scanId     String   @db.ObjectId
+  createdAt  DateTime @default(now())
+
+  @@unique([chain, from, to, signal])
+  @@index([chain, to])
+  @@map("wallet_edges")
+}
+
+// CEX hot wallets, bridges, mixers, programs — never treated as alts.
+model KnownEntity {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  chain     String
+  address   String
+  label     String
+  kind      String   // cex | program | bridge | mixer | relayer | other
+  createdAt DateTime @default(now())
+
+  @@unique([chain, address])
+  @@map("known_entities")
+}
